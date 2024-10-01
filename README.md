@@ -1,4 +1,4 @@
-# brAIn_1th_A_Session_First_Assignment
+# brAIn_1th_AA_Session_First_Assignment
 
 이 프로젝트는 brAIn 1기 AA 세션의 첫 번째 과제입니다. 이 README 파일은 프로젝트를 설치하고 실행하는 방법을 안내합니다.
 

@@ -50,13 +50,14 @@ def load_data():
     train_dataset = datasets.FashionMNIST(root='./data', train=True, download=True, transform=transform)
     test_dataset = datasets.FashionMNIST(root='./data', train=False, download=True, transform=transform)
 
-    # slice data
+    # 데이터셋 일부만 사용
     train_dataset.data = train_dataset.data[:50000]
     train_dataset.targets = train_dataset.targets[:50000]
 
     test_dataset.data = test_dataset.data[:10000]
     test_dataset.targets = test_dataset.targets[:10000]
-    #
+
+    # 데이터 로더
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=48, shuffle=True)
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=48, shuffle=False)
 
