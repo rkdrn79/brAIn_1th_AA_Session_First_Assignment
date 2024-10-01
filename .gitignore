@@ -1,4 +1,5 @@
 __pycache__
 
 notebooks/*
-data/*
+data/FashionMNIST/*
+src/adam_result.py

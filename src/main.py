@@ -6,41 +6,65 @@ import torch.optim as optim
 from tqdm import tqdm
 from torchvision import datasets, transforms
 
-from src.Adam import Adam
+# to debug
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 
-class ModelAdam(nn.Module):
-    def __init__(self, input_size=28*28, output_size=10) -> None:
-        super(ModelAdam, self).__init__()
-        self.linear_1 = nn.Linear(input_size, 256)
-        self.linear_2 = nn.Linear(256, 128)
-        self.linear_3 = nn.Linear(128, output_size)
-        self.activation_1 = nn.ReLU()
-        self.activation_2 = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
+from src.adam import Adam
+from src.utils.linear import Linear_np
+from src.utils.relu import Relu_np
+from src.utils.sigmoid import Sigmoid_np
+from src.utils.ce import Cross_Entropy_np
 
-        self.criterion = nn.CrossEntropyLoss()
+class ModelAdam():
+    def __init__(self, input_channel=28*28, output_channel=10) -> None:
+        
         self.optimizer = Adam()
         
-    def forward(self, x):
+        self.linear_1 = Linear_np(input_channel , 256)
+        self.linear_2 = Linear_np(256, 128)
+        self.linear_3 = Linear_np(128, output_channel)
+        self.activation_1 = Relu_np()
+        self.activation_2 = Relu_np()
+        self.sigmoid = Sigmoid_np()
+        
+        self.criterion = Cross_Entropy_np()
+        
+    def forward(self,x):
+        
+        #make x flatten [# of batch, 28*28 ]
         batch_size = x.shape[0]
-        x = x.view(batch_size, -1)  # Flatten
-        x = self.activation_1(self.linear_1(x))
-        x = self.activation_2(self.linear_2(x))
+        x = x.reshape(batch_size,-1)
+        
+        x = self.linear_1(x)
+        x = self.activation_1(x)
+        x = self.linear_2(x)
+        x = self.activation_2(x)
         x = self.linear_3(x)
-        x= self.sigmoid(x)
+        x = self.sigmoid(x)
+        
         return x
     
-    def loss(self, x, y):
-        return self.criterion(x, y)
+    def loss(self,x,y):
+        loss = self.criterion(x,y)
+        return loss
     
-    def backward(self, output, target):
-        loss = self.loss(output, target)
-        loss.backward()
-
+    def backward(self):
+        d_prev = 1
+        d_prev = self.criterion.backward(d_prev)
+        d_prev = self.sigmoid.backward(d_prev)
+        d_prev = self.linear_3.backward(d_prev)
+        d_prev = self.activation_2.backward(d_prev)
+        d_prev = self.linear_2.backward(d_prev)
+        d_prev = self.activation_1.backward(d_prev)
+        d_prev = self.linear_1.backward(d_prev)
+    
     def update_grad(self, learning_rate, batch_size):
         self.optimizer.update_grad('linear_3',self.linear_3,learning_rate/batch_size)
         self.optimizer.update_grad('linear_2',self.linear_2,learning_rate/batch_size)
         self.optimizer.update_grad('linear_1',self.linear_1,learning_rate/batch_size)
+        
         self.optimizer.step()
 
 
@@ -64,38 +88,39 @@ def load_data():
     return train_loader, test_loader
 
 
-def train(model, train_loader,test_loader, device):
-    print('traning to:', device)
-    model.train()
+def train(model, train_loader,test_loader):
     for epoch in range(TOTAL_EPOCH):
         epoch_loss = 0.0
         tqdm_batch = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{TOTAL_EPOCH}")
         for images, labels in tqdm_batch:
-            images, labels = images.to(device), labels.to(device)
+            images, labels = images.numpy(), labels.numpy()
 
-            output = model(images)
-            model.backward(output, labels)
-
-            model.update_grad(LR, BATCH_SIZE)
-            epoch_loss += model.loss(output, labels).item()
+            output = model.forward(images)
+            loss = model.loss(output,labels)
+            
+            epoch_loss+=loss
+            
+            model.backward()
+            model.update_grad(LR,BATCH_SIZE)
             tqdm_batch.set_postfix(loss=epoch_loss / (len(tqdm_batch)))
 
-        accuracy = validate(model, test_loader, device)
+        accuracy = validate(model, test_loader)
     return accuracy
 
 
-def validate(model, test_loader, device):
-    model.eval()
+def validate(model, test_loader):
     total_data = 0
     total_correct = 0
     with torch.no_grad():
         tqdm_batch = tqdm(test_loader, desc="Validation")
         for images, labels in tqdm_batch:
-            images, labels = images.to(device), labels.to(device)
-            output = model(images)
-            predicted_classes = torch.argmax(output, axis=1)
+            # torch to numpy
+            images, labels = images.numpy(), labels.numpy()
+            output = model.forward(images)
+            
+            predicted_classes = np.argmax(output, axis=1)
             total_correct += (predicted_classes == labels).sum().item()
-            total_data += labels.size(0)
+            total_data += labels.shape[0]
             tqdm_batch.set_postfix(accuracy=total_correct / total_data)
             
     accuracy = total_correct / total_data
@@ -111,9 +136,7 @@ def start(train_Adam_np=False):
         print("========================")
         print("training numpy model with adam...")
         model = ModelAdam()
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model.to(device)
-        accuracy = train(model, train_loader, test_loader, device)
+        accuracy = train(model, train_loader, test_loader)
         print(f"training with adam accuracy: {accuracy * 100:.2f}%")
         print("========================")
 
